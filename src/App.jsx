@@ -187,132 +187,126 @@ export default function App() {
   };
 
   // Execute the actual image & live photo capture
-  const executeShutter = async () => {
+  const executeShutter = () => {
+    if (isCapturing) return;
     setIsCapturing(true);
 
-    // 1. Shutter sound & Screen Flash
+    // 1. Instant Shutter sound & Screen Flash
     if (flashMode === 'on' || (flashMode === 'auto' && nightMode)) {
       setFlashBurst(true);
-      setTimeout(() => setFlashBurst(false), 220);
+      setTimeout(() => setFlashBurst(false), 160);
     }
     playShutterSound();
     triggerHaptic('shutter');
 
-    // 2. Prepare Live Photo recording if active
+    // Immediate button spring-back (100ms) - Never keep UI frozen!
+    setTimeout(() => {
+      setIsCapturing(false);
+    }, 100);
+
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+
+    // 2. Instant Frame Snapshot (Zero Shutter Lag - < 10ms)
+    const processedCanvas = processIPhonePhoto(videoEl, {
+      styleId: currentStyle.id,
+      filterId: currentFilter,
+      mode,
+      exposure,
+      clarity,
+      smartHDR,
+      aspectRatio,
+      nightMode
+    });
+
+    // 3. Live Photo Recording (Hardware MediaRecorder in background)
     const isLive = livePhotoActive && mode !== 'video';
     let liveClipPromise = null;
     let liveGifPromise = null;
 
-    if (isLive && videoRef.current) {
+    if (isLive) {
       setIsLiveRecording(true);
       playLivePhotoSound();
       if (liveRecorderRef.current && streamRef.current) {
-        liveClipPromise = liveRecorderRef.current.captureLiveClip(1600).catch(err => {
-          console.warn('Live clip capture failed:', err);
-          return null;
+        liveClipPromise = liveRecorderRef.current.captureLiveClip(1500).catch(() => null);
+      }
+      liveGifPromise = createLivePhotoGif(videoEl, {
+        durationMs: 1500,
+        fps: 8,
+        aspectRatio,
+        width: 360
+      }).catch(() => null);
+    }
+
+    // 4. Background Non-Blocking Processing & Storage
+    (async () => {
+      try {
+        const imageBlob = await canvasToBlob(processedCanvas, 'image/jpeg', 0.94);
+
+        // Thumbnail
+        const thumbCanvas = document.createElement('canvas');
+        thumbCanvas.width = 140;
+        thumbCanvas.height = Math.round(140 * (processedCanvas.height / processedCanvas.width));
+        const tCtx = thumbCanvas.getContext('2d');
+        tCtx.drawImage(processedCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        const thumbBlob = await canvasToBlob(thumbCanvas, 'image/jpeg', 0.8);
+
+        let videoBlob = null;
+        let gifBlob = null;
+        if (liveClipPromise) {
+          videoBlob = await liveClipPromise;
+        }
+        if (liveGifPromise) {
+          gifBlob = await liveGifPromise;
+        }
+        setIsLiveRecording(false);
+
+        const captureId = 'IMG_' + Date.now();
+        const captureData = {
+          id: captureId,
+          timestamp: Date.now(),
+          type: isLive ? 'live' : mode === 'portrait' ? 'portrait' : 'photo',
+          imageBlob,
+          thumbnailBlob: thumbBlob,
+          videoBlob,
+          gifBlob,
+          duration: videoBlob ? 1.5 : 0,
+          metadata: {
+            aspectRatio,
+            style: currentStyle.name,
+            filter: currentFilter,
+            exposure,
+            smartHDR,
+            clarity,
+            width: processedCanvas.width,
+            height: processedCanvas.height,
+            lens: '24mm ƒ/1.78'
+          }
+        };
+
+        await saveCapture(captureData);
+        await loadCaptures();
+
+        // 5. Auto-download without lag
+        if (autoDownload) {
+          if (isLive && gifBlob) {
+            downloadBlob(gifBlob, `${captureId}_LivePhoto_Animada.gif`);
+          } else {
+            downloadBlob(imageBlob, `${captureId}_iPhone_SmartHDR.jpg`);
+          }
+        }
+
+        confetti({
+          particleCount: 16,
+          spread: 35,
+          origin: { y: 0.85 },
+          colors: ['#FFD60A', '#FFFFFF']
         });
+      } catch (err) {
+        console.error('Background capture processing error:', err);
+        setIsLiveRecording(false);
       }
-      liveGifPromise = createLivePhotoGif(videoRef.current, {
-        durationMs: 1600,
-        fps: 10,
-        aspectRatio,
-        styleId: currentStyle.id,
-        width: 480
-      }).catch(err => {
-        console.warn('Live GIF generation failed:', err);
-        return null;
-      });
-    }
-
-    try {
-      const videoEl = videoRef.current;
-      if (!videoEl) throw new Error('Video element not available');
-
-      // 3. Process the high-resolution frame with Apple Smart HDR & Deep Fusion pipeline
-      const processedCanvas = processIPhonePhoto(videoEl, {
-        styleId: currentStyle.id,
-        filterId: currentFilter,
-        mode,
-        exposure,
-        clarity,
-        smartHDR,
-        aspectRatio,
-        nightMode
-      });
-
-      // 4. Convert to high-resolution JPEG Blob
-      const imageBlob = await canvasToBlob(processedCanvas, 'image/jpeg', 0.96);
-
-      // Create miniature thumbnail
-      const thumbCanvas = document.createElement('canvas');
-      thumbCanvas.width = 160;
-      thumbCanvas.height = Math.round(160 * (processedCanvas.height / processedCanvas.width));
-      const tCtx = thumbCanvas.getContext('2d');
-      tCtx.drawImage(processedCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-      const thumbBlob = await canvasToBlob(thumbCanvas, 'image/jpeg', 0.85);
-
-      // 5. Wait for Live Photo clip and animated GIF if recording
-      let videoBlob = null;
-      let gifBlob = null;
-      if (liveClipPromise) {
-        videoBlob = await liveClipPromise;
-      }
-      if (liveGifPromise) {
-        gifBlob = await liveGifPromise;
-      }
-      setIsLiveRecording(false);
-
-      // 6. Save Capture to IndexedDB
-      const captureId = 'IMG_' + Date.now();
-      const captureData = {
-        id: captureId,
-        timestamp: Date.now(),
-        type: isLive ? 'live' : mode === 'portrait' ? 'portrait' : 'photo',
-        imageBlob,
-        thumbnailBlob: thumbBlob,
-        videoBlob,
-        gifBlob,
-        duration: videoBlob ? 1.6 : 0,
-        metadata: {
-          aspectRatio,
-          style: currentStyle.name,
-          filter: currentFilter,
-          exposure,
-          smartHDR,
-          clarity,
-          width: processedCanvas.width,
-          height: processedCanvas.height,
-          lens: '24mm ƒ/1.78'
-        }
-      };
-
-      await saveCapture(captureData);
-      await loadCaptures();
-
-      // 7. Auto-download if user enabled it
-      if (autoDownload) {
-        if (isLive && gifBlob) {
-          // Download animated GIF so it is animated everywhere automatically!
-          downloadBlob(gifBlob, `${captureId}_LivePhoto_Animada.gif`);
-        } else {
-          downloadBlob(imageBlob, `${captureId}_iPhone_SmartHDR.jpg`);
-        }
-      }
-
-      // Subtle celebration sparkle
-      confetti({
-        particleCount: 20,
-        spread: 40,
-        origin: { y: 0.85 },
-        colors: ['#FFD60A', '#FFFFFF']
-      });
-
-    } catch (err) {
-      console.error('Error during capture:', err);
-      setIsLiveRecording(false);
-    } finally {
-      setIsCapturing(false);
-    }
+    })();
   };
 
   return (
