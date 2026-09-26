@@ -1,9 +1,8 @@
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 
 /**
- * Ultra-Fast Non-Blocking Animated GIF generator
- * Encodes 8 fluid frames with 128 colors and yields to the event loop on each frame,
- * ensuring 60 FPS UI responsiveness without freezing.
+ * Natural-Speed High-Fidelity Animated GIF Generator
+ * Matches 1:1 real-time motion speed (never sped up) with natural color tones.
  * 
  * @param {HTMLVideoElement} videoElement
  * @param {Object} options
@@ -11,13 +10,13 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
  */
 export async function createLivePhotoGif(videoElement, options = {}) {
   const {
-    durationMs = 1500,
-    fps = 8, // 8 smooth frames across 1.5s
+    durationMs = 2200, // Calm, authentic 2.2-second Live Photo duration
+    fps = 8, // 8 frames per second for smooth, unhurried motion
     aspectRatio = '4:3',
-    width = 360 // Lightweight resolution for instant encoding
+    width = 380
   } = options;
 
-  const totalFrames = Math.max(6, Math.min(10, Math.round((durationMs / 1000) * fps)));
+  const totalFrames = Math.max(12, Math.min(18, Math.round((durationMs / 1000) * fps)));
   const frameIntervalMs = Math.round(durationMs / totalFrames);
 
   let targetAspect = 4 / 3;
@@ -29,9 +28,14 @@ export async function createLivePhotoGif(videoElement, options = {}) {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   const gif = GIFEncoder();
-  const delay = Math.round(1000 / fps);
+  
+  // Exact 1:1 match between frame capture interval and playback delay
+  // This guarantees natural, real-time motion without fast-forward effect
+  const delay = frameIntervalMs;
 
   const srcW = videoElement.videoWidth || 1280;
   const srcH = videoElement.videoHeight || 960;
@@ -47,9 +51,8 @@ export async function createLivePhotoGif(videoElement, options = {}) {
   const cropX = (srcW - cropW) / 2;
   const cropY = (srcH - cropH) / 2;
 
-  // Capture frames with non-blocking pauses
   for (let i = 0; i < totalFrames; i++) {
-    // Yield to the main browser thread to avoid any UI stutter
+    // Yield to the browser render loop
     await new Promise(r => setTimeout(r, 0));
 
     try {
@@ -58,10 +61,8 @@ export async function createLivePhotoGif(videoElement, options = {}) {
       const frameImg = ctx.getImageData(0, 0, width, height);
       const frameData = frameImg.data;
 
-      // Fast quantization with 128 colors (instant quantization in < 8ms)
-      const palette = quantize(frameData, 128, {
-        format: 'rgba4444'
-      });
+      // 256 colors with natural RGB quantization (no banding or neon saturation)
+      const palette = quantize(frameData, 256);
       const index = applyPalette(frameData, palette);
 
       gif.writeFrame(index, width, height, {

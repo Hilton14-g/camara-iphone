@@ -68,6 +68,7 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
       if (videoPlayerRef.current) {
         videoPlayerRef.current.currentTime = 0;
         videoPlayerRef.current.muted = true;
+        videoPlayerRef.current.playbackRate = 1.0;
         const p = videoPlayerRef.current.play();
         if (p && p.then) {
           p.then(() => setIsVideoPlaying(true)).catch(() => setIsVideoPlaying(false));

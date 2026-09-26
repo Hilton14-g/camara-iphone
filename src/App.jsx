@@ -228,13 +228,13 @@ export default function App() {
       setIsLiveRecording(true);
       playLivePhotoSound();
       if (liveRecorderRef.current && streamRef.current) {
-        liveClipPromise = liveRecorderRef.current.captureLiveClip(1500).catch(() => null);
+        liveClipPromise = liveRecorderRef.current.captureLiveClip(2200).catch(() => null);
       }
       liveGifPromise = createLivePhotoGif(videoEl, {
-        durationMs: 1500,
+        durationMs: 2200,
         fps: 8,
         aspectRatio,
-        width: 360
+        width: 380
       }).catch(() => null);
     }
 
