@@ -1331,7 +1331,7 @@ html, body {
   touch-action: manipulation;
 }
 
-.fullscreen-img, .fullscreen-live-video {
+.fullscreen-img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -1341,12 +1341,24 @@ html, body {
   pointer-events: none;
 }
 
-.fullscreen-live-video.hidden, .fullscreen-img.hidden {
-  display: none;
+.fullscreen-live-video {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  transition: opacity 0.18s ease-in-out;
 }
 
-.fullscreen-live-video.visible, .fullscreen-img.visible {
-  display: block;
+.fullscreen-live-video.active-play {
+  opacity: 1;
+}
+
+.fullscreen-live-video.inactive-play {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .live-touch-hint {

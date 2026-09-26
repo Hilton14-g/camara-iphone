@@ -8,6 +8,7 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
   const [selectedCapture, setSelectedCapture] = useState(null);
   const [filterType, setFilterType] = useState('all'); // 'all', 'live', 'portrait'
   const [isPlayingLive, setIsPlayingLive] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isGeneratingGif, setIsGeneratingGif] = useState(false);
   const [liveMenuOpen, setLiveMenuOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -58,7 +59,6 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
   // Handle Live Photo press and hold with mobile safety
   const handleLivePressStart = (e) => {
     if (e && e.cancelable && e.type.startsWith('touch')) {
-      // Prevent mobile long-press context menu
       e.preventDefault();
     }
 
@@ -67,10 +67,11 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
       setIsPlayingLive(true);
       if (videoPlayerRef.current) {
         videoPlayerRef.current.currentTime = 0;
-        videoPlayerRef.current.muted = true; // Strictly required for mobile autoplay
-        videoPlayerRef.current.play().catch((err) => {
-          console.warn('Video playback warning on mobile:', err);
-        });
+        videoPlayerRef.current.muted = true;
+        const p = videoPlayerRef.current.play();
+        if (p && p.then) {
+          p.then(() => setIsVideoPlaying(true)).catch(() => setIsVideoPlaying(false));
+        }
       }
     }
   };
@@ -78,6 +79,7 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
   const handleLivePressEnd = () => {
     if (isPlayingLive) {
       setIsPlayingLive(false);
+      setIsVideoPlaying(false);
       if (videoPlayerRef.current) {
         videoPlayerRef.current.pause();
         videoPlayerRef.current.currentTime = 0;
@@ -145,35 +147,18 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
     if (!selectedCapture) return;
     triggerHaptic('light');
 
-    if (selectedCapture.gifBlob) {
+    if (selectedCapture.gifBlob && selectedCapture.gifBlob.size > 0) {
       downloadBlob(selectedCapture.gifBlob, `${selectedCapture.id}_LivePhoto_Animada.gif`);
       setDownloadMenuOpen(false);
       return;
     }
 
-    if (videoPlayerRef.current) {
-      setIsGeneratingGif(true);
-      try {
-        const gifBlob = await createLivePhotoGif(videoPlayerRef.current, {
-          durationMs: 1600,
-          fps: 10,
-          aspectRatio: selectedCapture.metadata?.aspectRatio || '4:3',
-          styleId: selectedCapture.metadata?.style || 'standard',
-          width: 480
-        });
-        downloadBlob(gifBlob, `${selectedCapture.id}_LivePhoto_Animada.gif`);
-        await updateCapture(selectedCapture.id, { gifBlob });
-        onRefresh();
-      } catch (err) {
-        console.warn('Error generating GIF on demand:', err);
-        downloadLiveVideo();
-      } finally {
-        setIsGeneratingGif(false);
-        setDownloadMenuOpen(false);
-      }
-    } else {
+    if (selectedCapture.videoBlob) {
       downloadLiveVideo();
+      return;
     }
+
+    downloadPhoto();
   };
 
   const downloadPhoto = () => {
@@ -183,9 +168,16 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
   };
 
   const downloadLiveVideo = () => {
-    if (!selectedCapture || !selectedCapture.videoBlob) return;
-    const ext = selectedCapture.videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-    downloadBlob(selectedCapture.videoBlob, `${selectedCapture.id}_LiveMotion.${ext}`);
+    if (!selectedCapture) return;
+    const blobToDownload = selectedCapture.videoBlob || selectedCapture.gifBlob;
+    if (!blobToDownload || blobToDownload.size === 0) {
+      alert('Esta foto no cuenta con video adjunto.');
+      return;
+    }
+    const isMp4 = blobToDownload.type.includes('mp4');
+    const isGif = blobToDownload.type.includes('gif');
+    const ext = isMp4 ? 'mp4' : isGif ? 'gif' : 'webm';
+    downloadBlob(blobToDownload, `${selectedCapture.id}_LiveMotion.${ext}`);
     setDownloadMenuOpen(false);
   };
 
@@ -381,34 +373,36 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
             onTouchEnd={handleLivePressEnd}
             onTouchCancel={handleLivePressEnd}
           >
-            {/* High-res Still Photo or Animated GIF */}
-            {selectedCapture.type === 'live' && isPlayingLive && gifUrls[selectedCapture.id] && !videoUrls[selectedCapture.id] ? (
-              <img
-                src={gifUrls[selectedCapture.id]}
-                alt="Live Animation"
-                className="fullscreen-img visible"
-                onContextMenu={(e) => e.preventDefault()}
-              />
-            ) : (
-              <img
-                src={imageUrls[selectedCapture.id]}
-                alt="High-Res Capture"
-                className={`fullscreen-img ${isPlayingLive && videoUrls[selectedCapture.id] ? 'hidden' : 'visible'}`}
-                onContextMenu={(e) => e.preventDefault()}
-              />
-            )}
+            {/* Base Image: ALWAYS VISIBLE! Never turns black under any circumstances */}
+            <img
+              src={
+                isPlayingLive && gifUrls[selectedCapture.id]
+                  ? gifUrls[selectedCapture.id]
+                  : imageUrls[selectedCapture.id]
+              }
+              alt="Capture"
+              className="fullscreen-img"
+              onContextMenu={(e) => e.preventDefault()}
+            />
 
-            {/* Live Photo Video Clip Player */}
+            {/* Live Photo Video Clip Player (Fades in over still photo only when actively rendering frames) */}
             {selectedCapture.type === 'live' && videoUrls[selectedCapture.id] && (
               <video
                 ref={videoPlayerRef}
                 src={videoUrls[selectedCapture.id]}
-                className={`fullscreen-live-video ${isPlayingLive ? 'visible' : 'hidden'}`}
+                className={`fullscreen-live-video ${isVideoPlaying && isPlayingLive ? 'active-play' : 'inactive-play'}`}
                 loop={selectedCapture.liveEffect === 'loop' || selectedCapture.liveEffect === 'bounce'}
                 playsInline
                 webkit-playsinline="true"
                 muted
                 preload="auto"
+                onPlaying={() => setIsVideoPlaying(true)}
+                onPause={() => setIsVideoPlaying(false)}
+                onEnded={() => {
+                  setIsVideoPlaying(false);
+                  setIsPlayingLive(false);
+                }}
+                onError={() => setIsVideoPlaying(false)}
               />
             )}
 

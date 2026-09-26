@@ -149,51 +149,30 @@ export async function updateCapture(id, updates) {
   });
 }
 
-/**
- * Downloads a Blob as a file with full compatibility for mobile phones (iOS/Android) and laptops
- * @param {Blob} blob
- * @param {string} filename
- */
-export async function downloadBlob(blob, filename) {
-  if (!blob) return;
-
-  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
-
-  // 1. On mobile devices: Try native Web Share API to save directly to phone Camera Roll / Gallery
-  if (isMobile && navigator.canShare && typeof File !== 'undefined') {
-    try {
-      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: filename
-        });
-        return;
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') return; // User closed share sheet intentionally
-      console.warn('Native mobile share failed, proceeding with direct download link', err);
-    }
+export function downloadBlob(blob, filename) {
+  if (!blob) {
+    alert('El archivo no está disponible.');
+    return;
   }
 
-  // 2. Fallback: Direct Anchor download
   const url = URL.createObjectURL(blob);
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+
+  // 1. Direct anchor download (works in modern Chrome, Edge, Safari, Firefox)
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
 
-  // On iOS Safari, if download is restricted, open blob in new tab for direct long-press save
-  if (isMobile && /iPhone|iPad|iPod/i.test(navigator.userAgent || '')) {
+  // 2. On mobile devices, ensure file opens if background download is restricted
+  if (isMobile) {
     setTimeout(() => {
       window.open(url, '_blank');
-    }, 450);
+    }, 400);
   }
 
-  // Keep URL valid for 60 seconds so mobile OS finishes saving
   setTimeout(() => {
     try {
       if (document.body.contains(a)) {
@@ -201,5 +180,5 @@ export async function downloadBlob(blob, filename) {
       }
       URL.revokeObjectURL(url);
     } catch (e) {}
-  }, 60000);
+  }, 90000);
 }
