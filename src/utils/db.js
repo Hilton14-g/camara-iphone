@@ -42,7 +42,8 @@ export async function saveCapture(capture) {
       type: capture.type || 'photo', // 'photo' | 'live' | 'portrait'
       imageBlob: capture.imageBlob,
       thumbnailBlob: capture.thumbnailBlob || capture.imageBlob,
-      videoBlob: capture.videoBlob || null, // For Live Photos
+      videoBlob: capture.videoBlob || null, // For Live Photos (MP4/WebM)
+      gifBlob: capture.gifBlob || null, // For Live Photos Animated GIF
       duration: capture.duration || 0,
       metadata: capture.metadata || {
         aspectRatio: '4:3',

@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AppleIcons } from './AppleIcons';
 import { downloadBlob, deleteCapture, updateCapture } from '../utils/db';
 import { triggerHaptic } from '../utils/haptics';
+import { createLivePhotoGif } from '../utils/gifGenerator';
 
 export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
   const [selectedCapture, setSelectedCapture] = useState(null);
   const [filterType, setFilterType] = useState('all'); // 'all', 'live', 'portrait'
   const [isPlayingLive, setIsPlayingLive] = useState(false);
+  const [isGeneratingGif, setIsGeneratingGif] = useState(false);
   const [liveMenuOpen, setLiveMenuOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
@@ -115,6 +117,41 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
   };
 
   // Downloads
+  const downloadAnimatedGif = async () => {
+    if (!selectedCapture) return;
+    triggerHaptic('light');
+
+    if (selectedCapture.gifBlob) {
+      downloadBlob(selectedCapture.gifBlob, `${selectedCapture.id}_LivePhoto_Animada.gif`);
+      setDownloadMenuOpen(false);
+      return;
+    }
+
+    if (videoPlayerRef.current) {
+      setIsGeneratingGif(true);
+      try {
+        const gifBlob = await createLivePhotoGif(videoPlayerRef.current, {
+          durationMs: 1600,
+          fps: 10,
+          aspectRatio: selectedCapture.metadata?.aspectRatio || '4:3',
+          styleId: selectedCapture.metadata?.style || 'standard',
+          width: 480
+        });
+        downloadBlob(gifBlob, `${selectedCapture.id}_LivePhoto_Animada.gif`);
+        await updateCapture(selectedCapture.id, { gifBlob });
+        onRefresh();
+      } catch (err) {
+        console.warn('Error generating GIF on demand:', err);
+        downloadLiveVideo();
+      } finally {
+        setIsGeneratingGif(false);
+        setDownloadMenuOpen(false);
+      }
+    } else {
+      downloadLiveVideo();
+    }
+  };
+
   const downloadPhoto = () => {
     if (!selectedCapture || !selectedCapture.imageBlob) return;
     downloadBlob(selectedCapture.imageBlob, `${selectedCapture.id}_iPhone_SmartHDR.jpg`);
@@ -128,9 +165,11 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
     setDownloadMenuOpen(false);
   };
 
-  const downloadBoth = () => {
-    downloadPhoto();
-    setTimeout(downloadLiveVideo, 350);
+  const downloadAll = () => {
+    downloadAnimatedGif();
+    setTimeout(downloadPhoto, 350);
+    setTimeout(downloadLiveVideo, 700);
+    setDownloadMenuOpen(false);
   };
 
   // Navigate next / prev in fullscreen
@@ -424,10 +463,20 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
 
               {downloadMenuOpen && selectedCapture.type === 'live' && (
                 <div className="download-dropdown-menu">
-                  <button onClick={downloadPhoto}>Descargar Foto (JPG)</button>
-                  <button onClick={downloadLiveVideo}>Descargar Video En Vivo</button>
-                  <button onClick={downloadBoth} className="accent">
-                    Descargar Ambos (Foto + Video)
+                  <button onClick={downloadAnimatedGif} className="accent download-option-btn" disabled={isGeneratingGif}>
+                    <div className="download-btn-title">🎞️ Foto Animada (.GIF)</div>
+                    <div className="download-btn-sub">¡Se mueve sola en tu galería y WhatsApp!</div>
+                  </button>
+                  <button onClick={downloadLiveVideo} className="download-option-btn">
+                    <div className="download-btn-title">🎥 Video en Vivo (.MP4)</div>
+                    <div className="download-btn-sub">Video con sonido para redes y reels</div>
+                  </button>
+                  <button onClick={downloadPhoto} className="download-option-btn">
+                    <div className="download-btn-title">📸 Foto Nítida (.JPG)</div>
+                    <div className="download-btn-sub">Foto fija en máxima calidad Smart HDR</div>
+                  </button>
+                  <button onClick={downloadAll} className="download-option-btn all-pack-btn">
+                    <div className="download-btn-title">📦 Descargar Todo el Paquete</div>
                   </button>
                 </div>
               )}

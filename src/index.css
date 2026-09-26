@@ -1478,37 +1478,63 @@ html, body {
 
 .download-dropdown-menu {
   position: absolute;
-  bottom: 56px;
+  bottom: 64px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--ios-surface-solid);
+  background: rgba(28, 28, 30, 0.95);
+  backdrop-filter: blur(24px);
   border: 1px solid var(--ios-border);
-  border-radius: 14px;
-  padding: 6px;
+  border-radius: 18px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 220px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8);
+  gap: 6px;
+  min-width: 270px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9);
   z-index: 60;
+  animation: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.download-dropdown-menu button {
-  background: transparent;
-  border: none;
+.download-option-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
   color: var(--ios-text-white);
-  padding: 10px 12px;
-  font-size: 13px;
+  padding: 10px 14px;
   text-align: left;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.download-dropdown-menu button:hover {
-  background: rgba(255, 255, 255, 0.1);
+.download-option-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.download-dropdown-menu button.accent {
+.download-option-btn.accent {
+  background: rgba(255, 214, 10, 0.14);
+  border-color: rgba(255, 214, 10, 0.35);
+}
+
+.download-option-btn.accent .download-btn-title {
   color: var(--ios-yellow);
+}
+
+.download-btn-title {
+  font-size: 14px;
   font-weight: 700;
+}
+
+.download-btn-sub {
+  font-size: 11px;
+  color: var(--ios-text-sub);
+}
+
+.download-option-btn.all-pack-btn {
+  margin-top: 4px;
+  border-top: 1px solid var(--ios-border);
+  border-radius: 8px;
+  background: transparent;
 }

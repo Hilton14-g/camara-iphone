@@ -13,6 +13,7 @@ import { processIPhonePhoto, canvasToBlob, PHOTOGRAPHIC_STYLES } from './utils/i
 import { saveCapture, getAllCaptures, downloadBlob } from './utils/db';
 import { LivePhotoRecorder } from './utils/livePhotoRecorder';
 import { createSimulatedCameraStream } from './utils/mockCamera';
+import { createLivePhotoGif } from './utils/gifGenerator';
 
 export default function App() {
   // Camera & Stream State
@@ -200,12 +201,25 @@ export default function App() {
     // 2. Prepare Live Photo recording if active
     const isLive = livePhotoActive && mode !== 'video';
     let liveClipPromise = null;
+    let liveGifPromise = null;
 
-    if (isLive && liveRecorderRef.current && streamRef.current) {
+    if (isLive && videoRef.current) {
       setIsLiveRecording(true);
       playLivePhotoSound();
-      liveClipPromise = liveRecorderRef.current.captureLiveClip(1600).catch(err => {
-        console.warn('Live clip capture failed:', err);
+      if (liveRecorderRef.current && streamRef.current) {
+        liveClipPromise = liveRecorderRef.current.captureLiveClip(1600).catch(err => {
+          console.warn('Live clip capture failed:', err);
+          return null;
+        });
+      }
+      liveGifPromise = createLivePhotoGif(videoRef.current, {
+        durationMs: 1600,
+        fps: 10,
+        aspectRatio,
+        styleId: currentStyle.id,
+        width: 480
+      }).catch(err => {
+        console.warn('Live GIF generation failed:', err);
         return null;
       });
     }
@@ -237,12 +251,16 @@ export default function App() {
       tCtx.drawImage(processedCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
       const thumbBlob = await canvasToBlob(thumbCanvas, 'image/jpeg', 0.85);
 
-      // 5. Wait for Live Photo clip if recording
+      // 5. Wait for Live Photo clip and animated GIF if recording
       let videoBlob = null;
+      let gifBlob = null;
       if (liveClipPromise) {
         videoBlob = await liveClipPromise;
-        setIsLiveRecording(false);
       }
+      if (liveGifPromise) {
+        gifBlob = await liveGifPromise;
+      }
+      setIsLiveRecording(false);
 
       // 6. Save Capture to IndexedDB
       const captureId = 'IMG_' + Date.now();
@@ -253,6 +271,7 @@ export default function App() {
         imageBlob,
         thumbnailBlob: thumbBlob,
         videoBlob,
+        gifBlob,
         duration: videoBlob ? 1.6 : 0,
         metadata: {
           aspectRatio,
@@ -272,12 +291,11 @@ export default function App() {
 
       // 7. Auto-download if user enabled it
       if (autoDownload) {
-        downloadBlob(imageBlob, `${captureId}_iPhone_SmartHDR.jpg`);
-        if (videoBlob) {
-          setTimeout(() => {
-            const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-            downloadBlob(videoBlob, `${captureId}_LiveMotion.${ext}`);
-          }, 300);
+        if (isLive && gifBlob) {
+          // Download animated GIF so it is animated everywhere automatically!
+          downloadBlob(gifBlob, `${captureId}_LivePhoto_Animada.gif`);
+        } else {
+          downloadBlob(imageBlob, `${captureId}_iPhone_SmartHDR.jpg`);
         }
       }
 
