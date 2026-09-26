@@ -150,19 +150,56 @@ export async function updateCapture(id, updates) {
 }
 
 /**
- * Downloads a Blob as a file with a given filename
+ * Downloads a Blob as a file with full compatibility for mobile phones (iOS/Android) and laptops
  * @param {Blob} blob
  * @param {string} filename
  */
-export function downloadBlob(blob, filename) {
+export async function downloadBlob(blob, filename) {
+  if (!blob) return;
+
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+
+  // 1. On mobile devices: Try native Web Share API to save directly to phone Camera Roll / Gallery
+  if (isMobile && navigator.canShare && typeof File !== 'undefined') {
+    try {
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: filename
+        });
+        return;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return; // User closed share sheet intentionally
+      console.warn('Native mobile share failed, proceeding with direct download link', err);
+    }
+  }
+
+  // 2. Fallback: Direct Anchor download
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
   document.body.appendChild(a);
   a.click();
+
+  // On iOS Safari, if download is restricted, open blob in new tab for direct long-press save
+  if (isMobile && /iPhone|iPad|iPod/i.test(navigator.userAgent || '')) {
+    setTimeout(() => {
+      window.open(url, '_blank');
+    }, 450);
+  }
+
+  // Keep URL valid for 60 seconds so mobile OS finishes saving
   setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 300);
+    try {
+      if (document.body.contains(a)) {
+        document.body.removeChild(a);
+      }
+      URL.revokeObjectURL(url);
+    } catch (e) {}
+  }, 60000);
 }

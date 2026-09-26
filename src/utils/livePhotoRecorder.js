@@ -25,16 +25,21 @@ export class LivePhotoRecorder {
         return reject(new Error('No active video stream'));
       }
 
-      // Check supported MIME types for video recording
-      let mimeType = 'video/webm;codecs=vp9,opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm;codecs=vp8,opus';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/mp4';
+      // Prioritize video/mp4 for universal iOS Safari and Android mobile support
+      const candidateTypes = [
+        'video/mp4;codecs=avc1',
+        'video/mp4',
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm'
+      ];
+
+      let mimeType = '';
+      for (const t of candidateTypes) {
+        if (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t)) {
+          mimeType = t;
+          break;
+        }
       }
 
       try {

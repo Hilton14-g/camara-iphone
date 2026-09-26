@@ -14,12 +14,14 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [imageUrls, setImageUrls] = useState({});
   const [videoUrls, setVideoUrls] = useState({});
+  const [gifUrls, setGifUrls] = useState({});
   const videoPlayerRef = useRef(null);
 
   // Convert Blobs to ObjectURLs
   useEffect(() => {
     const newImgUrls = {};
     const newVidUrls = {};
+    const newGifUrls = {};
 
     captures.forEach((c) => {
       if (c.imageBlob) {
@@ -28,14 +30,19 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
       if (c.videoBlob) {
         newVidUrls[c.id] = URL.createObjectURL(c.videoBlob);
       }
+      if (c.gifBlob) {
+        newGifUrls[c.id] = URL.createObjectURL(c.gifBlob);
+      }
     });
 
     setImageUrls(newImgUrls);
     setVideoUrls(newVidUrls);
+    setGifUrls(newGifUrls);
 
     return () => {
       Object.values(newImgUrls).forEach(URL.revokeObjectURL);
       Object.values(newVidUrls).forEach(URL.revokeObjectURL);
+      Object.values(newGifUrls).forEach(URL.revokeObjectURL);
     };
   }, [captures]);
 
@@ -48,14 +55,22 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
     return true;
   });
 
-  // Handle Live Photo press and hold
-  const handleLivePressStart = () => {
+  // Handle Live Photo press and hold with mobile safety
+  const handleLivePressStart = (e) => {
+    if (e && e.cancelable && e.type.startsWith('touch')) {
+      // Prevent mobile long-press context menu
+      e.preventDefault();
+    }
+
     if (selectedCapture && selectedCapture.type === 'live') {
       triggerHaptic('live');
       setIsPlayingLive(true);
       if (videoPlayerRef.current) {
         videoPlayerRef.current.currentTime = 0;
-        videoPlayerRef.current.play().catch(console.warn);
+        videoPlayerRef.current.muted = true; // Strictly required for mobile autoplay
+        videoPlayerRef.current.play().catch((err) => {
+          console.warn('Video playback warning on mobile:', err);
+        });
       }
     }
   };
@@ -67,6 +82,15 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
         videoPlayerRef.current.pause();
         videoPlayerRef.current.currentTime = 0;
       }
+    }
+  };
+
+  const togglePlayLive = (e) => {
+    if (e) e.stopPropagation();
+    if (isPlayingLive) {
+      handleLivePressEnd();
+    } else {
+      handleLivePressStart();
     }
   };
 
@@ -347,20 +371,32 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
             </button>
           </div>
 
-          {/* Media Container with Live Photo touch-and-hold */}
+          {/* Media Container with Live Photo touch-and-hold and mobile safety */}
           <div
             className="fullscreen-media-container"
+            onContextMenu={(e) => e.preventDefault()}
             onMouseDown={handleLivePressStart}
             onMouseUp={handleLivePressEnd}
             onTouchStart={handleLivePressStart}
             onTouchEnd={handleLivePressEnd}
+            onTouchCancel={handleLivePressEnd}
           >
-            {/* High-res Still Photo */}
-            <img
-              src={imageUrls[selectedCapture.id]}
-              alt="High-Res Capture"
-              className={`fullscreen-img ${isPlayingLive ? 'hidden' : 'visible'}`}
-            />
+            {/* High-res Still Photo or Animated GIF */}
+            {selectedCapture.type === 'live' && isPlayingLive && gifUrls[selectedCapture.id] && !videoUrls[selectedCapture.id] ? (
+              <img
+                src={gifUrls[selectedCapture.id]}
+                alt="Live Animation"
+                className="fullscreen-img visible"
+                onContextMenu={(e) => e.preventDefault()}
+              />
+            ) : (
+              <img
+                src={imageUrls[selectedCapture.id]}
+                alt="High-Res Capture"
+                className={`fullscreen-img ${isPlayingLive && videoUrls[selectedCapture.id] ? 'hidden' : 'visible'}`}
+                onContextMenu={(e) => e.preventDefault()}
+              />
+            )}
 
             {/* Live Photo Video Clip Player */}
             {selectedCapture.type === 'live' && videoUrls[selectedCapture.id] && (
@@ -370,15 +406,21 @@ export default function GalleryModal({ isOpen, onClose, captures, onRefresh }) {
                 className={`fullscreen-live-video ${isPlayingLive ? 'visible' : 'hidden'}`}
                 loop={selectedCapture.liveEffect === 'loop' || selectedCapture.liveEffect === 'bounce'}
                 playsInline
-                muted={false}
+                webkit-playsinline="true"
+                muted
+                preload="auto"
               />
             )}
 
-            {/* Live Photo instruction prompt */}
-            {selectedCapture.type === 'live' && !isPlayingLive && (
-              <div className="live-touch-hint">
-                <span>Mantén presionado para ver en vivo</span>
-              </div>
+            {/* Live Photo interactive prompt: Tap or hold */}
+            {selectedCapture.type === 'live' && (
+              <button
+                type="button"
+                className={`live-touch-hint ${isPlayingLive ? 'playing' : ''}`}
+                onClick={togglePlayLive}
+              >
+                <span>{isPlayingLive ? '⏸ Tocando en vivo' : '▶ Toca para ver en vivo'}</span>
+              </button>
             )}
           </div>
 

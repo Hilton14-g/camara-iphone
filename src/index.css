@@ -1318,10 +1318,27 @@ html, body {
   cursor: pointer;
 }
 
+.fullscreen-media-container {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
 .fullscreen-img, .fullscreen-live-video {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
 }
 
 .fullscreen-live-video.hidden, .fullscreen-img.hidden {
@@ -1334,21 +1351,30 @@ html, body {
 
 .live-touch-hint {
   position: absolute;
-  bottom: 20px;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(12px);
+  bottom: 24px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 214, 10, 0.4);
   color: var(--ios-yellow);
-  padding: 6px 14px;
-  border-radius: 18px;
-  font-size: 12px;
+  padding: 8px 18px;
+  border-radius: 22px;
+  font-size: 13px;
   font-weight: 600;
-  pointer-events: none;
-  animation: bounce-subtle 2s infinite;
+  cursor: pointer;
+  z-index: 25;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-@keyframes bounce-subtle {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+.live-touch-hint:active, .live-touch-hint.playing {
+  background: var(--ios-yellow);
+  color: #000000;
+  font-weight: 700;
+  transform: scale(0.96);
+  border-color: var(--ios-yellow);
 }
 
 /* Nav arrows */
